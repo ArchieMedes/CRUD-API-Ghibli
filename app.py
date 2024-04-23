@@ -8,13 +8,17 @@ from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
 from bson.errors import InvalidId
 
+from util.api_handler import APIHandler
+
+
+# INSTANCE OF THE APP WITH FLASK
 app = Flask(__name__)
 
 # MONGO DB CONFIGURATION
 # 'mongo-db' is the service name in docker compose
-app.config["MONGO_URI"] = "mongodb://mongo-db:27017/mydatabase"
-
+app.config['MONGO_URI'] = 'mongodb://mongo-db:27017/mydatabase'
 mongo = PyMongo(app)
+
 
 # ========= ROUTES ============================================
 @app.route('/')
@@ -29,7 +33,6 @@ def create_user():
     """ Here I process the user data to then be stored"""
 
     user_data = request.json
-    print("user_data:", user_data)
     if not user_data:  # to validate the existence of actual data in the request
         return jsonify({'error': 'Missing data'}), 400
 
@@ -120,3 +123,38 @@ def delete_user(user_id):
     if db_response.deleted_count:
         return jsonify({'result': 'Success at deleting the user'}), 200
     return jsonify({'error': 'User not found'}), 404
+
+
+# =============================================================
+@app.route('/user/<user_id>/ghibli', methods=['GET'])
+def ghibli_api_get_request(user_id):
+    """
+        Here each user can make a GET request through the Studio Ghibli API
+        depending on their role as users of this current API
+    """
+
+    # convert user_id from string to objectId for mongodb handling
+    try:
+        user_id = ObjectId(user_id)
+    except ImportError as exc:
+        print('Invalid User ID')
+        raise ValueError from exc
+
+    # now we retrieve user role from db
+    current_user = mongo.db.collection.find_one({'_id': user_id})
+    current_user_role = current_user['role']
+
+    # we handle the API requests here
+    api_handler = APIHandler('https://ghibliapi.vercel.app')
+    api_response = api_handler.get_data(current_user_role)
+
+    # if there was an ERROR in the request
+    if api_response['code'] != 200:
+        return jsonify({
+            'error': api_response['error']
+        }), api_response['code']
+
+    return jsonify({
+        'status': 'success',
+        'external_api_response': api_response
+    })
