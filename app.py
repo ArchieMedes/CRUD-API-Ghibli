@@ -8,17 +8,22 @@ from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
 from bson.errors import InvalidId
 
+from util.api_handler import APIHandler
+
+
+# INSTANCE OF THE APP WITH FLASK
 app = Flask(__name__)
 
 # MONGO DB CONFIGURATION
 # 'mongo-db' is the service name in docker compose
-app.config["MONGO_URI"] = "mongodb://mongo-db:27017/mydatabase"  
-
+app.config['MONGO_URI'] = 'mongodb://mongo-db:27017/mydatabase'
 mongo = PyMongo(app)
+
 
 # ========= ROUTES ============================================
 @app.route('/')
 def health_check():
+    """ Health check just that """
     return 'Service up and running!'
 
 
@@ -28,7 +33,6 @@ def create_user():
     """ Here I process the user data to then be stored"""
 
     user_data = request.json
-    print("user_data:", user_data)
     if not user_data:  # to validate the existence of actual data in the request
         return jsonify({'error': 'Missing data'}), 400
 
@@ -76,14 +80,15 @@ def get_all_users():
 @app.route('/user/<user_id>', methods=['PUT'])
 def update_user(user_id):
     """ Here update any data of the user """
-    
+
     new_user_data = request.json  # getting the data from the payload (request body)
     # If the request is empty {} here we handle the error
     if not new_user_data:
         return jsonify({'error': 'Data not provided'}), 400
 
-    # Here we could check for the new_user_data content, if it meets the expected requirements (fields and values)
-    # ...
+    # Here we could check for the new_user_data content,
+    # if it meets the expected requirements (fields and values)
+    # TODO...
 
     # Attempt to convert user_id (string) into an ObjectId format
     try:
@@ -94,7 +99,8 @@ def update_user(user_id):
     # here we attempt to update the specified document with the specified new data
     db_response = mongo.db.collection.update_one({'_id': object_id}, {'$set': new_user_data})
 
-    # 'matched_count' instead of 'modified_count' which remains in 0 if the new_user_data is exactly the same as the old one
+    # 'matched_count' instead of 'modified_count' which remains in 0 if
+    #  the new_user_data is exactly the same as the old one
     if db_response.matched_count:
         return jsonify({'result': 'Success updating user data'}), 200
     return jsonify({'error': 'User not found'}), 404
@@ -117,3 +123,38 @@ def delete_user(user_id):
     if db_response.deleted_count:
         return jsonify({'result': 'Success at deleting the user'}), 200
     return jsonify({'error': 'User not found'}), 404
+
+
+# =============================================================
+@app.route('/user/<user_id>/ghibli', methods=['GET'])
+def ghibli_api_get_request(user_id):
+    """
+        Here each user can make a GET request through the Studio Ghibli API
+        depending on their role as users of this current API
+    """
+
+    # convert user_id from string to objectId for mongodb handling
+    try:
+        user_id = ObjectId(user_id)
+    except ImportError as exc:
+        print('Invalid User ID')
+        raise ValueError from exc
+
+    # now we retrieve user role from db
+    current_user = mongo.db.collection.find_one({'_id': user_id})
+    current_user_role = current_user['role']
+
+    # we handle the API requests here
+    api_handler = APIHandler('https://ghibliapi.vercel.app')
+    api_response = api_handler.get_data(current_user_role)
+
+    # if there was an ERROR in the request
+    if api_response['code'] != 200:
+        return jsonify({
+            'error': api_response['error']
+        }), api_response['code']
+
+    return jsonify({
+        'status': 'success',
+        'external_api_response': api_response
+    })
