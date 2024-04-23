@@ -12,13 +12,14 @@ app = Flask(__name__)
 
 # MONGO DB CONFIGURATION
 # 'mongo-db' is the service name in docker compose
-app.config["MONGO_URI"] = "mongodb://mongo-db:27017/mydatabase"  
+app.config["MONGO_URI"] = "mongodb://mongo-db:27017/mydatabase"
 
 mongo = PyMongo(app)
 
 # ========= ROUTES ============================================
 @app.route('/')
 def health_check():
+    """ Health check just that """
     return 'Service up and running!'
 
 
@@ -76,14 +77,15 @@ def get_all_users():
 @app.route('/user/<user_id>', methods=['PUT'])
 def update_user(user_id):
     """ Here update any data of the user """
-    
+
     new_user_data = request.json  # getting the data from the payload (request body)
     # If the request is empty {} here we handle the error
     if not new_user_data:
         return jsonify({'error': 'Data not provided'}), 400
 
-    # Here we could check for the new_user_data content, if it meets the expected requirements (fields and values)
-    # ...
+    # Here we could check for the new_user_data content,
+    # if it meets the expected requirements (fields and values)
+    # TODO...
 
     # Attempt to convert user_id (string) into an ObjectId format
     try:
@@ -94,7 +96,8 @@ def update_user(user_id):
     # here we attempt to update the specified document with the specified new data
     db_response = mongo.db.collection.update_one({'_id': object_id}, {'$set': new_user_data})
 
-    # 'matched_count' instead of 'modified_count' which remains in 0 if the new_user_data is exactly the same as the old one
+    # 'matched_count' instead of 'modified_count' which remains in 0 if
+    #  the new_user_data is exactly the same as the old one
     if db_response.matched_count:
         return jsonify({'result': 'Success updating user data'}), 200
     return jsonify({'error': 'User not found'}), 404
